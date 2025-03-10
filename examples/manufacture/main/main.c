@@ -13,6 +13,9 @@
 #include "bsp_btn.h"
 #include "driver/uart.h"
 #include "cobs.h"
+#include "pwm_audio.h"
+#include "io_expander.h"
+#include "audio_data.h"
 
 #define VERSION   "v1.0.2-test"
 
@@ -52,6 +55,8 @@ static const char* TAG = "TEST";
 uint8_t buf[BUF_SIZE];   //recv 
 uint8_t data[BUF_SIZE];  //decode
 
+#define ESP32_AUDIO_PWM (46)
+
 enum  pkt_type {
 
     PKT_TYPE_CMD_COLLECT_INTERVAL = 0xA0, //uin32_t 
@@ -73,6 +78,7 @@ enum  pkt_type {
     //todo
 };
 
+static bool speak_flag = false;
 static int __cmd_send(uint8_t cmd, void *p_data, uint8_t len)
 {
     uint8_t buf[32] = {0};
@@ -100,6 +106,11 @@ static int __cmd_send(uint8_t cmd, void *p_data, uint8_t len)
 #endif
 
     if( ret.status == COBS_ENCODE_OK ) {
+        ESP_LOGI(TAG, "send data %d: ", index);
+        for (int i=0; i < ret.out_len; i++ ) {
+            printf( "0x%x ", buf[i] );
+        }
+        printf("\r\n");
         return uart_write_bytes(ESP32_COMM_PORT_NUM,  buf, ret.out_len+1);
     }
     return -1;
@@ -199,7 +210,7 @@ static void esp32_rp2040_comm_task(void *arg)
     while (1) {
         int len = uart_read_bytes(ESP32_COMM_PORT_NUM, buf, (BUF_SIZE - 1), 1 / portTICK_PERIOD_MS);
 #if SENSOR_COMM_DEBUG
-        ESP_LOGI(TAG, "len:%d",  len);
+        // ESP_LOGI(TAG, "len:%d",  len);
 #endif 
         int index  = 0;
         uint8_t *p_buf_start =  buf;
@@ -277,12 +288,77 @@ static void console_task(void *arg)
     }
 }
 
+static void esp32_audio_pwm_task(void *arg)
+{
+    size_t cnt, length = sizeof(audio_data) / sizeof(audio_data[0]);
+    uint32_t block_w = 512;
+    uint8_t output_p1 = 0;
+    int audio_hz = 16000;
+    int audio_bit = 16;
+    int audio_vol = -15;
+    pwm_audio_config_t pac;
+    pac.duty_resolution = LEDC_TIMER_10_BIT;
+    pac.gpio_num_left = ESP32_AUDIO_PWM;
+    pac.ledc_channel_left = LEDC_CHANNEL_1;
+    pac.gpio_num_right = -1;
+    pac.ledc_channel_right = LEDC_CHANNEL_0;
+    pac.ledc_timer_sel = LEDC_TIMER_0;
+    pac.ringbuf_len = 1024 * 8;
+
+    while (1)
+    {
+        if (speak_flag)
+        {
+            ESP_LOGI(TAG, "AUDIO PLAY ");
+            output_p1 = pca9535_read_register(0x03);
+            output_p1 |= (1 << 1); 
+            pca9535_write_register(0x03, output_p1);   
+            pwm_audio_init(&pac);
+            pwm_audio_set_volume(audio_vol);
+            pwm_audio_set_param(audio_hz, audio_bit, 1);
+            pwm_audio_start();
+            for (size_t i = 0; i < length;)
+            {
+                if ((length - i) < block_w)
+                {
+                    block_w = length - i;
+                }
+                pwm_audio_write((uint8_t *)(audio_data + i), block_w, &cnt, 3000 / portTICK_PERIOD_MS);
+                i += cnt;
+            }
+
+            ESP_LOGI(TAG, "AUDIO STOP ");
+            output_p1 = pca9535_read_register(0x03);
+            output_p1 &= ~(1 << 1);
+            pca9535_write_register(0x03, output_p1);
+            pwm_audio_stop();
+            pwm_audio_deinit();
+            speak_flag = false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
 static void __btn_click_callback(void* arg)
 {
     static bool st=1;
     ESP_LOGI("btn",  TEST_MSG "button click ok");
     st=!st;
     bsp_lcd_set_backlight(st);
+}
+
+static void __btn_double_click_callback(void* arg)
+{
+    uint32_t cnt=0;
+    ESP_LOGI("btn", "Double Click");
+    speak_flag = true;
+}
+
+static void __btn_long_press_start_callback(void* arg)
+{
+    uint32_t cnt=0;
+    ESP_LOGI("btn", "Long Press Start");
+    __cmd_send(PKT_TYPE_CMD_SHUTDOWN, &cnt, sizeof(cnt));
 }
 
 void app_main(void)
@@ -296,6 +372,7 @@ void app_main(void)
     ui_init();
     lv_port_sem_give();
 
+    i2c_init();
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -306,7 +383,10 @@ void app_main(void)
 
     xTaskCreate(console_task, "console_task", 1024*4, NULL, 6, NULL);
     xTaskCreate(esp32_rp2040_comm_task, "esp32_rp2040_comm_task", 1024*4, NULL, 5, NULL);
+    xTaskCreate(esp32_audio_pwm_task, "esp32_audio_pwm_task", 1024*4, NULL, 5, NULL);
     bsp_btn_register_callback( BOARD_BTN_ID_USER, BUTTON_SINGLE_CLICK,  __btn_click_callback, NULL);
+    bsp_btn_register_callback( BOARD_BTN_ID_USER, BUTTON_DOUBLE_CLICK, __btn_double_click_callback, NULL);
+    bsp_btn_register_callback( BOARD_BTN_ID_USER, BUTTON_LONG_PRESS_START, __btn_long_press_start_callback, NULL);
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(10000));
