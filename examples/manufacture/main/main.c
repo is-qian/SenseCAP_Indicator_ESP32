@@ -247,11 +247,43 @@ static void esp32_rp2040_comm_task(void *arg)
                 if( ret.out_len > 1  &&  ret.status == COBS_DECODE_OK ) { //todo  ret.status
                     __data_parse_handle((uint8_t *)data, ret.out_len);
                 }
-
                 p_buf_start = p_buf_end + 1; // next message
             }
         }
     }
+}
+
+static void audio_test(int argc, char **argv)
+{
+    speak_flag = true;
+}
+
+static void esp32_sendto_rp2040(int argc, char **argv)
+{
+    uint32_t cnt=0x01;
+    __cmd_send(PKT_TYPE_CMD_TEST, &cnt, sizeof(cnt));
+}
+
+static void register_audio_test(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "audio_test",
+        .help = "audio speak test",
+        .hint = NULL,
+        .func = &audio_test,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&cmd) );
+}
+
+static void register_uart_test(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "uart_test",
+        .help = "uart to rp2040 test",
+        .hint = NULL,
+        .func = &esp32_sendto_rp2040,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&cmd) );
 }
 
 static void console_task(void *arg)
@@ -272,6 +304,8 @@ static void console_task(void *arg)
     register_wifi();
     register_ping();
 
+    register_audio_test();
+    register_uart_test();
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     /* Prompt to be printed before each line.
@@ -351,7 +385,7 @@ static void __btn_double_click_callback(void* arg)
 {
     uint32_t cnt=0;
     ESP_LOGI("btn", "Double Click");
-    speak_flag = true;
+    audio_test(0, NULL);
 }
 
 static void __btn_long_press_start_callback(void* arg)
