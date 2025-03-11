@@ -216,14 +216,11 @@ static void esp32_rp2040_comm_task(void *arg)
         uint8_t *p_buf_start =  buf;
         uint8_t *p_buf_end = buf;
         if( len > 0 ) {
-
-#if SENSOR_COMM_DEBUG
             printf("recv:  ");
             for(int i=0; i < len; i++ ) {
                 printf( "0x%x ", buf[i] );
             }
             printf("\r\n");
-#endif 
             while ( p_buf_start < (buf + len)) {
                 uint8_t *p_buf_end = p_buf_start;
                 while( p_buf_end < (buf + len) ) {
@@ -253,15 +250,17 @@ static void esp32_rp2040_comm_task(void *arg)
     }
 }
 
-static void audio_test(int argc, char **argv)
+static int audio_test(int argc, char **argv)
 {
     speak_flag = true;
+    return 0;
 }
 
-static void esp32_sendto_rp2040(int argc, char **argv)
+static int esp32_sendto_rp2040(int argc, char **argv)
 {
     uint32_t cnt=0x01;
     __cmd_send(PKT_TYPE_CMD_TEST, &cnt, sizeof(cnt));
+    return 0;
 }
 
 static void register_audio_test(void)
