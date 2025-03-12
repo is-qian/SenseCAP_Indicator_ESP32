@@ -396,6 +396,8 @@ static void __btn_long_press_start_callback(void* arg)
 
 void app_main(void)
 {
+    uint8_t register_tmp = 0;
+
     ESP_LOGI("", SENSECAP, VERSION, __DATE__, __TIME__);
     ESP_ERROR_CHECK(bsp_board_init());
 
@@ -406,6 +408,10 @@ void app_main(void)
     lv_port_sem_give();
 
     i2c_init();
+
+    register_tmp = pca9535_read_register(0x03);
+    register_tmp |= (1 << 0);
+    pca9535_write_register(0x03, register_tmp);
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
