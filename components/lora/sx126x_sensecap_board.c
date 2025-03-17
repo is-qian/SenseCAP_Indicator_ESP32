@@ -139,23 +139,24 @@ void SX126xIoInit( void )
     indicator_io_expander->set_direction(EXPANDER_IO_RADIO_DIO_1, 0); //input
     indicator_io_expander->set_direction(EXPANDER_IO_RADIO_VER, 0); //input
 
-    uint16_t pin_val;
-    uint8_t cnt = 5;
-    uint8_t hight_cnt = 0;
-    for (size_t i = 0; i < cnt; i++)
-    {
-        pin_val = 0;
-        esp_err_t ret = indicator_io_expander->read_input_pins(&pin_val);
-        if( (pin_val & (0x01 << EXPANDER_IO_RADIO_VER)) ) {
-            hight_cnt++;
-        }
-        vTaskDelay(5 / portTICK_PERIOD_MS);
-    }
-    if( hight_cnt >= 3) {
-        g_have_tcxo = true;
-    } else {
-        g_have_tcxo = false;
-    }
+    // uint16_t pin_val;
+    // uint8_t cnt = 5;
+    // uint8_t hight_cnt = 0;
+    // for (size_t i = 0; i < cnt; i++)
+    // {
+    //     pin_val = 0;
+    //     esp_err_t ret = indicator_io_expander->read_input_pins(&pin_val);
+    //     if( (pin_val & (0x01 << EXPANDER_IO_RADIO_VER)) ) {
+    //         hight_cnt++;
+    //     }
+    //     vTaskDelay(5 / portTICK_PERIOD_MS);
+    // }
+    // if( hight_cnt >= 3) {
+    //     g_have_tcxo = true;
+    // } else {
+    //     g_have_tcxo = false;
+    // }
+    g_have_tcxo = true;
     printf("TCXO:%d,VOLTAGE:%d\r\n", g_have_tcxo, SX126X_TCXO_CTRL_VOLTAGE);
 }
 
